@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Routing Quality Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #1a1a2e; --ink-soft: #4a4a6a; --ink-muted: #9090b0;
+  --paper: #f7f5f0; --paper-warm: #efe9de; --card: #ffffff;
+  --accent: #c4622d; --accent-soft: #f0d5c8;
+  --good: #2d9e6b; --good-soft: #d0eed8;
+  --warn: #d4a017; --warn-soft: #f5eac8;
+  --replace: #7c5cbf; --replace-soft: #ede8f7;
+  --data: #1a7a8a; --data-soft: #d0eef2;
+  --border: rgba(26,26,46,0.09); --shadow: 0 2px 16px rgba(26,26,46,0.06);
+}
+body { font-family: 'DM Sans', sans-serif; background: var(--paper); color: var(--ink); }
+.page { max-width: 1140px; margin: 0 auto; padding: 48px 28px 100px; }
+
+.nav { display: flex; gap: 4px; margin-bottom: 36px; background: var(--paper-warm); border-radius: 12px; padding: 4px; width: fit-content; flex-wrap: wrap; }
+.nav-btn { padding: 8px 16px; border-radius: 9px; border: none; background: transparent; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--ink-muted); cursor: pointer; transition: all 0.15s; }
+.nav-btn.active { background: var(--card); color: var(--ink); box-shadow: 0 1px 6px rgba(26,26,46,0.1); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 36px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.header h1 { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 600; line-height: 1.2; }
+.header p { font-size: 13px; color: var(--ink-muted); margin-top: 5px; font-weight: 300; }
+.period { background: var(--paper-warm); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+.hero-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+.hero-grid-2 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.hero-card { background: var(--card); border-radius: 14px; border: 1px solid var(--border); padding: 22px; box-shadow: var(--shadow); }
+.hero-card.dark { background: var(--ink); }
+.hero-card.data-theme { background: var(--data); }
+.metric-label { font-size: 10px; font-weight: 500; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+.dark .metric-label, .data-theme .metric-label { color: rgba(255,255,255,0.45); }
+.metric-value { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 600; line-height: 1; letter-spacing: -1px; }
+.dark .metric-value { color: white; font-size: 46px; }
+.data-theme .metric-value { color: white; font-size: 36px; }
+.metric-sub { font-size: 11px; color: var(--ink-muted); margin-top: 7px; font-weight: 300; line-height: 1.5; }
+.dark .metric-sub, .data-theme .metric-sub { color: rgba(255,255,255,0.4); }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 10px; font-weight: 500; margin-top: 7px; }
+.pill-warn { background: var(--accent-soft); color: var(--accent); }
+.pill-good { background: var(--good-soft); color: var(--good); }
+.pill-data { background: var(--data-soft); color: var(--data); }
+.pill-replace { background: var(--replace-soft); color: var(--replace); }
+
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.g21 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+.full { margin-bottom: 16px; }
+
+.card { background: var(--card); border-radius: 14px; border: 1px solid var(--border); padding: 24px; box-shadow: var(--shadow); }
+.card-title { font-size: 11px; font-weight: 500; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 18px; }
+
+/* Plain english explanation box */
+.explain { background: var(--paper-warm); border-radius: 10px; padding: 14px 16px; margin-top: 14px; border-left: 3px solid var(--border); }
+.explain p { font-size: 12px; color: var(--ink-soft); line-height: 1.7; font-weight: 300; }
+.explain strong { font-weight: 500; color: var(--ink); }
+
+.section-header { margin: 28px 0 14px; }
+.section-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 600; }
+.section-desc { font-size: 12px; color: var(--ink-muted); margin-top: 3px; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table th { text-align: left; padding: 0 10px 10px 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-muted); border-bottom: 1px solid var(--border); }
+.data-table td { padding: 11px 10px 11px 0; border-bottom: 1px solid var(--border); color: var(--ink-soft); vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--paper); }
+.mono { font-family: monospace; font-size: 10px; background: var(--paper-warm); padding: 2px 7px; border-radius: 5px; color: var(--ink); }
+
+.bar-row { display: flex; align-items: center; gap: 6px; }
+.bar-track { height: 5px; background: var(--paper-warm); border-radius: 3px; overflow: hidden; min-width: 60px; flex: 1; }
+.bar-fill { height: 100%; border-radius: 3px; }
+.bar-val { font-size: 11px; font-weight: 500; color: var(--ink); min-width: 34px; text-align: right; }
+
+.stacked-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 1px; }
+.sb-seg { height: 100%; }
+
+.tag { display: inline-block; padding: 2px 8px; border-radius: 9px; font-size: 10px; font-weight: 500; }
+.tag-high { background: #fde8e0; color: #c4622d; }
+.tag-med { background: #fdf3d0; color: #9a7200; }
+.tag-low { background: #d8f0e4; color: #1e7a4a; }
+.tag-data { background: var(--data-soft); color: var(--data); }
+
+.pattern-legend { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.pl-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+.pl-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+.insight-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; }
+.insight-card { background: var(--paper-warm); border-radius: 12px; padding: 18px; border: 1px solid var(--border); }
+.insight-icon { font-size: 18px; margin-bottom: 8px; }
+.insight-title { font-size: 12px; font-weight: 500; color: var(--ink); margin-bottom: 5px; }
+.insight-body { font-size: 11px; color: var(--ink-soft); line-height: 1.6; font-weight: 300; }
+
+.week-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.week-table th { text-align: center; padding: 6px 8px; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); border-bottom: 1px solid var(--border); }
+.week-table th:first-child { text-align: left; }
+.week-table td { padding: 10px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+.week-table td:first-child { text-align: left; }
+.week-table tr:last-child td { border-bottom: none; }
+.week-cell { display: inline-block; padding: 3px 8px; border-radius: 8px; font-weight: 500; font-size: 11px; }
+
+.legend-row { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--ink-soft); }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+@media(max-width:768px) {
+  .hero-grid,.hero-grid-2,.g2,.g3,.g21,.insight-strip { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div>
+      <h1>Routing Quality Report</h1>
+      <p>How much ops is correcting auto-routing output before trips run</p>
+    </div>
+    <span class="period">Mar 22 – Apr 20, 2026 &nbsp;·&nbsp; 30 days</span>
+  </div>
+
+  <div class="nav">
+    <button class="nav-btn active" onclick="showTab('overview',this)">Overview</button>
+    <button class="nav-btn" onclick="showTab('patterns',this)">Edit patterns</button>
+    <button class="nav-btn" onclick="showTab('clients',this)">By client</button>
+    <button class="nav-btn" onclick="showTab('timing',this)">Timing</button>
+    <button class="nav-btn" onclick="showTab('trends',this)">Trends</button>
+    <button class="nav-btn" onclick="showTab('dataquality',this)">Data quality</button>
+  </div>
+
+  <!-- ===== OVERVIEW ===== -->
+  <div id="tab-overview" class="tab-panel active">
+    <div class="hero-grid">
+      <div class="hero-card dark">
+        <div class="metric-label">Ops intervention rate</div>
+        <div class="metric-value">71.1%</div>
+        <div class="metric-sub">5,224 of 7,351 auto-routed trips were manually edited by ops before running</div>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Trips with swaps</div>
+        <div class="metric-value">36.0%</div>
+        <div class="metric-sub">employees replaced on these trips</div>
+        <span class="pill pill-replace">2,647 trips</span>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Avg churn on swapped trips</div>
+        <div class="metric-value">54.1%</div>
+        <div class="metric-sub">of employees replaced per trip where swaps occurred</div>
+        <span class="pill pill-warn">High</span>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Clean trips</div>
+        <div class="metric-value">28.9%</div>
+        <div class="metric-sub">ran exactly as routed with zero changes</div>
+        <span class="pill pill-good">2,127 trips</span>
+      </div>
+    </div>
+
+    <div class="explain">
+      <p><strong>What this means:</strong> Auto-routing creates trip plans. Ops intervention rate tells you how often those plans were changed before the trip actually ran. 71% means 7 out of every 10 trips were modified. Churn tells you how deeply — on trips where employees were swapped out, more than half the employee list was replaced on average.</p>
+    </div>
+
+    <!-- Data quality summary row -->
+    <div class="hero-grid-2" style="margin-top:20px;">
+      <div class="hero-card data-theme">
+        <div class="metric-label">Data-driven removals</div>
+        <div class="metric-value">4.9%</div>
+        <div class="metric-sub">357 trips had employees dropped automatically — not by ops decision</div>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Roster cancellations</div>
+        <div class="metric-value">331</div>
+        <div class="metric-sub">employees removed because they cancelled their own roster</div>
+        <span class="pill pill-data">Upstream issue</span>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Profile-change removals</div>
+        <div class="metric-value">39</div>
+        <div class="metric-sub">employees dropped due to team, privilege or stoppage changes</div>
+        <span class="pill pill-data">Upstream issue</span>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Unfixed data drops</div>
+        <div class="metric-value">61</div>
+        <div class="metric-sub">trips where an employee fell off automatically and ops never added anyone back</div>
+        <span class="pill pill-warn">No correction</span>
+      </div>
+    </div>
+
+    <div class="explain">
+      <p><strong>Data-driven removals vs ops intervention:</strong> Not all changes to a trip are ops decisions. Sometimes an employee is automatically removed because they cancelled their roster booking, or because their profile changed (team transfer, transport privilege removed, etc.). These are called data-driven removals — the system did it, not ops. They're a sign of upstream data instability, not routing failure. The 61 unfixed data drops are trips where this happened and no one added a replacement — meaning those trips ran short.</p>
+    </div>
+
+    <div class="g3" style="margin-top:20px;">
+      <div class="hero-card" style="border-left:3px solid #2d9e6b;">
+        <div class="metric-label">Add only</div>
+        <div class="metric-value" style="font-size:28px;">19.4%</div>
+        <div class="metric-sub">Routing under-allocated — ops topped up. No churn.</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--ink-muted);">1,427 trips</div>
+      </div>
+      <div class="hero-card" style="border-left:3px solid #c4622d;">
+        <div class="metric-label">Delete only</div>
+        <div class="metric-value" style="font-size:28px;">15.6%</div>
+        <div class="metric-sub">Routing over-allocated — ops trimmed. No churn.</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--ink-muted);">1,150 trips</div>
+      </div>
+      <div class="hero-card" style="border-left:3px solid #7c5cbf;">
+        <div class="metric-label">Replace (churn)</div>
+        <div class="metric-value" style="font-size:28px;">36.0%</div>
+        <div class="metric-sub">Right count, wrong people — employees swapped out.</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--ink-muted);">2,647 trips · avg 54.1% churn</div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <p><strong>Three types of ops correction:</strong> <strong>Add only</strong> means routing didn't assign enough people to a trip — ops had to add more. <strong>Delete only</strong> means routing put too many people on a trip — ops removed the excess. <strong>Replace</strong> means routing got the number of people right but picked the wrong ones — ops swapped them out. Replace is the hardest problem to solve because it means the routing algorithm's logic for grouping employees together is off, not just its count.</p>
+    </div>
+
+    <div class="g21" style="margin-top:4px;">
+      <div class="card">
+        <div class="card-title">Daily intervention rate</div>
+        <div style="position:relative;height:180px;">
+          <canvas id="trendMain" role="img" aria-label="Daily intervention rate over 30 days"></canvas>
+        </div>
+        <div class="explain" style="margin-top:12px;">
+          <p>Each bar is one day. The line shows how many trips were modified that day as a percentage of all auto-routed trips. Weekdays consistently run 70–76%. Weekends drop to 64–65% — fewer trips, possibly less complex scheduling.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Churn depth — replace trips only</div>
+        <div style="position:relative;height:150px;">
+          <canvas id="donutMain" role="img" aria-label="Churn depth distribution for replace trips"></canvas>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;">
+          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ink-soft);"><span style="width:8px;height:8px;border-radius:2px;background:#a8d8bc;display:inline-block;"></span>Minor (1–33%) 13.3%</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ink-soft);"><span style="width:8px;height:8px;border-radius:2px;background:#f5eac8;display:inline-block;"></span>Moderate (34–66%) 60.0%</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ink-soft);"><span style="width:8px;height:8px;border-radius:2px;background:#f0c89a;display:inline-block;"></span>Heavy (67–99%) 9.4%</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ink-soft);"><span style="width:8px;height:8px;border-radius:2px;background:#c4622d;display:inline-block;"></span>Full rebuild (100%+) 17.3%</div>
+        </div>
+        <div style="font-size:10px;color:var(--ink-muted);margin-top:8px;font-style:italic;">Churn = min(adds, deletes) ÷ employees · replace trips only</div>
+      </div>
+    </div>
+
+    <div class="insight-strip">
+      <div class="insight-card">
+        <div class="insight-icon">🔄</div>
+        <div class="insight-title">Swaps are deep when they happen</div>
+        <div class="insight-body">On the 36% of trips where employees were replaced, more than half the employee list was swapped on average. 17% were complete rebuilds.</div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-icon">📐</div>
+        <div class="insight-title">Larger trips get corrected more</div>
+        <div class="insight-body">Solo trips: 50% intervention. Trips with 4–5 employees: 87%. Routing gets harder to trust as more people need to be grouped.</div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-icon">🔍</div>
+        <div class="insight-title">Two problems, not one</div>
+        <div class="insight-body">Ops intervention (routing logic) and data drops (roster instability) are separate issues. Fixing routing won't fix data drops — they need different solutions.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PATTERNS ===== -->
+  <div id="tab-patterns" class="tab-panel">
+    <div class="section-header">
+      <div class="section-title">Edit pattern breakdown</div>
+      <div class="section-desc">How ops corrected routing — by adding, removing, or swapping employees</div>
+    </div>
+
+    <div class="explain" style="margin-bottom:16px;">
+      <p><strong>How to read these charts:</strong> Every auto-routed trip falls into one of four categories. <strong>Untouched</strong> — routing was accepted as-is. <strong>Add only</strong> — ops added more employees without removing any (routing put too few people). <strong>Delete only</strong> — ops removed employees without adding any (routing put too many). <strong>Replace</strong> — ops both added and removed employees on the same trip (routing picked the wrong people). Churn only applies to the Replace category.</p>
+    </div>
+
+    <div class="pattern-legend">
+      <div class="pl-item"><div class="pl-dot" style="background:#d8f0e4;"></div>Untouched</div>
+      <div class="pl-item"><div class="pl-dot" style="background:#2d9e6b;"></div>Add only</div>
+      <div class="pl-item"><div class="pl-dot" style="background:#c4622d;"></div>Delete only</div>
+      <div class="pl-item"><div class="pl-dot" style="background:#7c5cbf;"></div>Replace (churn applies here)</div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">By trip size</div>
+        <div style="position:relative;height:220px;">
+          <canvas id="sizePatternChart" role="img" aria-label="Stacked bar patterns by trip size"></canvas>
+        </div>
+        <div class="explain">
+          <p>Solo trips (1 person) are dominated by <strong>delete only</strong> — routing assigns someone, ops removes them. This likely means routing is including employees who aren't actually available. Larger trips (4–5 people) are mostly <strong>replace</strong> — routing gets the count right but picks the wrong combination of employees.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Login vs logout direction</div>
+        <div style="position:relative;height:220px;">
+          <canvas id="dirPatternChart" role="img" aria-label="Stacked bar login vs logout patterns"></canvas>
+        </div>
+        <div class="explain">
+          <p>Login trips (morning, employees going to office) and logout trips (end of day, going home) have very similar intervention patterns. Direction of travel is not a factor in routing quality — the problem is consistent in both directions.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="full card">
+      <div class="card-title">By client — pattern breakdown</div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Client</th><th>Trips</th><th>Untouched</th><th>Add only</th><th>Delete only</th><th>Replace</th><th>Split</th><th>Dominant issue</th></tr>
+        </thead>
+        <tbody id="patternTableBody"></tbody>
+      </table>
+      <div class="explain">
+        <p>The <strong>dominant issue</strong> column shows what type of correction happens most often for each client. Clients with mostly <strong>Delete only</strong> have a routing over-allocation problem — fix vehicle capacity settings. Clients with mostly <strong>Replace</strong> have a wrong-people problem — the grouping logic needs review. Clients with mostly <strong>Add only</strong> have under-allocation — routing is too conservative.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CLIENTS ===== -->
+  <div id="tab-clients" class="tab-panel">
+    <div class="section-header">
+      <div class="section-title">Client performance</div>
+      <div class="section-desc">Which clients have the most routing correction and data instability</div>
+    </div>
+
+    <div class="explain" style="margin-bottom:16px;">
+      <p><strong>How to read this table:</strong> <strong>Intervention rate</strong> = how often ops had to change the routing output. <strong>Churn</strong> = on trips where employees were swapped, how many were replaced (only counts replace-pattern trips). <strong>Net per trip</strong> = on average, did trips end up with more or fewer employees than routing planned. Negative means routing over-allocated. <strong>Data intervention</strong> = how often employees were automatically dropped due to roster cancellations or profile changes — this is NOT ops doing it, it's upstream data changing.</p>
+    </div>
+
+    <div class="full card">
+      <table class="data-table">
+        <thead>
+          <tr><th>Client</th><th>Trips</th><th>Ops intervention</th><th>Data intervention</th><th>Churn (replace trips)</th><th>Net per trip</th><th>Dominant pattern</th><th>Assessment</th></tr>
+        </thead>
+        <tbody id="clientTableBody"></tbody>
+      </table>
+      <div class="explain">
+        <p><strong>694b93</strong> stands out with both high ops intervention (77.7%) and very high data intervention (17.4%) — routing is wrong AND employee data is unstable. These are compounding problems. <strong>697af8</strong> is the healthiest client at 52.6% intervention with only 1.6% data intervention — routing is more reliable and employee data is stable. <strong>69c649</strong> has the highest data intervention rate at 23.8% — the primary issue here is not routing but roster instability.</p>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Ops intervention rate by client</div>
+        <div style="position:relative;height:260px;">
+          <canvas id="clientIntChart" role="img" aria-label="Horizontal bar chart ops intervention rates by client"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Data intervention rate by client</div>
+        <div style="position:relative;height:260px;">
+          <canvas id="clientDataChart" role="img" aria-label="Horizontal bar chart data intervention rates by client"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="explain">
+      <p>Comparing these two charts side by side shows whether a client's problem is routing quality (left chart high) or data stability (right chart high). A client high on both has two separate problems to fix. A client high only on the left has a pure routing configuration issue. A client high only on the right has a roster/HR data quality issue that no routing improvement will solve.</p>
+    </div>
+  </div>
+
+  <!-- ===== TIMING ===== -->
+  <div id="tab-timing" class="tab-panel">
+    <div class="section-header">
+      <div class="section-title">When does intervention happen?</div>
+      <div class="section-desc">Day of week, shift time, and trip size patterns</div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Ops vs data intervention by day of week</div>
+        <div style="position:relative;height:200px;">
+          <canvas id="dowChart" role="img" aria-label="Grouped bar chart ops and data intervention by day"></canvas>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:#1a1a2e;"></div>Ops intervention %</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#1a7a8a;"></div>Data intervention %</div>
+        </div>
+        <div class="explain">
+          <p>Ops intervention is consistent Monday–Thursday (71–73%) and drops slightly Friday–Sunday (64–65%). Data intervention peaks mid-week — Wednesday has the most roster cancellations. This may be because mid-week roster changes (employees cancelling bookings made earlier in the week) are more common than last-minute weekend cancellations.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Edit pattern split by day</div>
+        <div style="position:relative;height:200px;">
+          <canvas id="dowPatternChart" role="img" aria-label="Stacked bar patterns by day of week"></canvas>
+        </div>
+        <div class="explain">
+          <p>The pattern mix is consistent across all days — replace is always the largest category, followed by add only. This means the routing failure mode doesn't change by day of week. It's a structural problem, not a scheduling anomaly.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="full card">
+      <div class="card-title">Ops vs data intervention by shift hour</div>
+      <div style="position:relative;height:230px;">
+        <canvas id="shiftChart" role="img" aria-label="Line chart ops and data intervention rates by shift hour"></canvas>
+      </div>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:#1a1a2e;"></div>Ops intervention %</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1a7a8a;"></div>Data intervention %</div>
+      </div>
+      <div class="explain">
+        <p>Ops intervention is high across all shift hours — no shift is reliably clean. Data intervention (roster/profile drops) spikes at 12:00, 14:00, 15:00, and 10:00 shifts. These are mid-day shifts where employees may be cancelling same-day bookings. The 08:00 shift has a 20% data intervention rate — the highest — suggesting overnight roster cancellations are hitting morning trips hardest.</p>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Trip size — intervention rate vs churn</div>
+        <div style="position:relative;height:200px;">
+          <canvas id="sizeIntChart" role="img" aria-label="Grouped bar chart trip size vs intervention and churn"></canvas>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:#1a1a2e;"></div>Intervention %</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(196,98,45,0.6);"></div>Churn % (replace trips)</div>
+        </div>
+        <div class="explain">
+          <p>As trips get larger, ops intervention goes up — routing is harder to trust for multi-person trips. But churn goes down for larger trips. Solo trip churn is 115% (the same seat is swapped multiple times), while 6-person trip churn is only 25%. For bigger trips, routing gets the people approximately right and ops makes smaller adjustments.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Daily ops workload</div>
+        <div style="position:relative;height:200px;">
+          <canvas id="workloadChart" role="img" aria-label="Bar chart daily total trips and intervened trips"></canvas>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(26,26,46,0.15);"></div>Total trips</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#c4622d;"></div>Intervened trips</div>
+        </div>
+        <div class="explain">
+          <p>The orange bars show how many trips ops had to manually correct each day. Peak days (4/8, 3/25, 4/14) saw 260–340 individual trip edits. Assuming each edit takes 2–3 minutes, that's 8–17 hours of manual correction work on a single day across the operations team.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TRENDS ===== -->
+  <div id="tab-trends" class="tab-panel">
+    <div class="section-header">
+      <div class="section-title">Weekly trends</div>
+      <div class="section-desc">Is routing quality getting better or worse over time?</div>
+    </div>
+
+    <div class="full card">
+      <div class="card-title">Ops intervention rate — week by week per client</div>
+      <div style="overflow-x:auto;">
+        <table class="week-table" id="weeklyTable"></table>
+      </div>
+      <div class="explain">
+        <p>Each cell shows the intervention rate for that client in that week. <span style="background:#fde8e0;color:#c4622d;padding:1px 6px;border-radius:4px;font-size:11px;">Red</span> = above 75%, ops is correcting most trips. <span style="background:#fdf3d0;color:#9a7200;padding:1px 6px;border-radius:4px;font-size:11px;">Amber</span> = 65–75%, moderate correction. <span style="background:#d8f0e4;color:#1e7a4a;padding:1px 6px;border-radius:4px;font-size:11px;">Green</span> = below 65%, routing is relatively trusted. A client going from green to red over weeks signals deteriorating routing quality or growing data instability.</p>
+      </div>
+    </div>
+
+    <div class="full card" style="margin-top:16px;">
+      <div class="card-title">Weekly trend lines — top 6 clients by volume</div>
+      <div style="position:relative;height:260px;">
+        <canvas id="weeklyTrendChart" role="img" aria-label="Multi-line weekly intervention rates per client"></canvas>
+      </div>
+      <div class="explain">
+        <p>Most clients are flat or slightly worsening week over week — there's no evidence of spontaneous improvement. <strong>694b93</strong> (highest line) has been consistently above 74% for 4 weeks with no improvement. <strong>697af8</strong> (lowest, only one data point) is the best performer at 52.6% but only appears in one week. No client shows a clear downward trend, which means the routing quality problem is structural — it won't fix itself without an active change.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DATA QUALITY ===== -->
+  <div id="tab-dataquality" class="tab-panel">
+    <div class="section-header">
+      <div class="section-title">Data quality</div>
+      <div class="section-desc">Employees dropping off trips automatically — not because of ops decisions, but because of upstream data changes</div>
+    </div>
+
+    <div class="explain" style="margin-bottom:20px;">
+      <p><strong>What is data intervention?</strong> When routing approves a trip, it locks in a set of employees. But sometimes, between routing and the trip actually running, something changes — an employee cancels their own roster booking, or their profile changes (they move teams, their transport access gets removed, their pickup stop changes). When this happens, the system automatically removes them from the trip. This is called a <strong>data-driven removal</strong>. It's not routing getting it wrong — it's the input data becoming stale after routing ran.</p>
+    </div>
+
+    <div class="hero-grid-2">
+      <div class="hero-card data-theme">
+        <div class="metric-label">Trips affected</div>
+        <div class="metric-value">4.9%</div>
+        <div class="metric-sub">357 of 7,351 trips had at least one automatic employee drop</div>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Roster cancellations</div>
+        <div class="metric-value">331</div>
+        <div class="metric-sub">employees removed because they cancelled their own booking</div>
+        <span class="pill pill-warn">89.4% of data drops</span>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Profile changes</div>
+        <div class="metric-value">39</div>
+        <div class="metric-sub">employees removed due to team, privilege or stoppage changes</div>
+        <span class="pill pill-data">10.6% of data drops</span>
+      </div>
+      <div class="hero-card">
+        <div class="metric-label">Trips with both issues</div>
+        <div class="metric-value">296</div>
+        <div class="metric-sub">trips where data drop happened AND ops also made corrections</div>
+        <span class="pill pill-warn">Double hit</span>
+      </div>
+    </div>
+
+    <div class="explain">
+      <p><strong>Roster cancellations vs profile changes:</strong> <strong>Roster cancellations</strong> (331 cases) happen when an employee had booked a seat on a trip but cancelled it after routing ran. This is the employee changing their mind or plans. <strong>Profile changes</strong> (39 cases) happen when something in the employee's master data changed — they moved to a different team, their transport access was revoked, or their pickup location changed. Both make the routing output stale, but they need different fixes. Roster cancellations need tighter booking deadlines. Profile changes need faster data sync before routing runs.</p>
+    </div>
+
+    <div class="g2" style="margin-top:16px;">
+      <div class="card">
+        <div class="card-title">Data intervention rate by client</div>
+        <div style="position:relative;height:280px;">
+          <canvas id="dataClientChart" role="img" aria-label="Horizontal bar chart data intervention by client"></canvas>
+        </div>
+        <div class="explain">
+          <p><strong>69c649</strong> has the highest data intervention at 23.8% — nearly 1 in 4 trips had an automatic employee drop. <strong>694b93</strong> is next at 17.4%. These clients have roster instability problems that need to be addressed at the HR/attendance system level, not the routing level. Clients like <strong>683ed8</strong> and <strong>697af8</strong> below 2% are well-managed — employees commit to their bookings and data stays stable.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Roster vs profile removals by client</div>
+        <div style="position:relative;height:280px;">
+          <canvas id="dataTypeChart" role="img" aria-label="Stacked bar chart roster vs profile removals by client"></canvas>
+        </div>
+        <div class="explain">
+          <p>Almost all data drops are roster cancellations (blue). Profile changes (teal) are rare and scattered. This means the primary upstream fix is roster management — reducing last-minute cancellations — rather than employee data hygiene.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Data intervention by day of week</div>
+        <div style="position:relative;height:200px;">
+          <canvas id="dataDowChart" role="img" aria-label="Bar chart data intervention by day of week"></canvas>
+        </div>
+        <div class="explain">
+          <p>Wednesday has the most data drops (6.8%), followed by Tuesday (6.0%). Weekend data drops are very low (1.0–1.5%). This suggests mid-week roster cancellations — employees booking trips at the start of the week and cancelling by mid-week when plans change — are the primary driver.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Unfixed data drops — trips that ran short</div>
+        <div style="position:relative;height:200px;">
+          <canvas id="dataUnfixedChart" role="img" aria-label="Bar chart showing fixed vs unfixed data drops"></canvas>
+        </div>
+        <div class="explain">
+          <p><strong>Unfixed drops</strong> are the most operationally significant — these are trips where an employee was automatically removed and ops never added anyone back. The trip ran with fewer people than planned. 61 trips (17.1% of all data-intervened trips) fell into this category. This is a capacity and service quality issue.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="full card">
+      <div class="card-title">Weekly data intervention trend by client</div>
+      <div style="overflow-x:auto;">
+        <table class="week-table" id="weeklyDataTable"></table>
+      </div>
+      <div class="explain">
+        <p><strong>694b93</strong> shows persistently high data intervention every week (15–20%), suggesting a chronic roster management problem. <strong>69c649</strong> only appears in one week (23.8%) — either a one-off event or a new client with teething problems. Clients where data intervention is consistently low have good roster discipline — employees commit to bookings and don't cancel last-minute.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+const C = { untouched:'#d8f0e4', add:'#2d9e6b', del:'#c4622d', replace:'#7c5cbf', data:'#1a7a8a', rost:'#2d9e9e', prof:'#5ab8c4' };
+
+const trendDates = ['3/22','3/23','3/24','3/25','3/26','3/27','3/28','3/29','3/30','3/31','4/1','4/2','4/3','4/4','4/5','4/6','4/7','4/8','4/9','4/10','4/11','4/12','4/13','4/14','4/15','4/16','4/17','4/18','4/19','4/20'];
+const trendVals = [69.7,65.1,65.6,71.1,69.2,64.9,67.1,74.6,73.6,74.2,74.3,76.2,65.6,64.5,60.3,72.7,75.7,72.7,72.2,68.5,72.7,49.0,76.3,76.6,76.6,70.3,71.3,57.0,61.8,71.1];
+
+const sites = [
+  {id:'694b93...',trips:627,int:77.7,data:17.4,churn:73.8,net:-0.51,un:140,add:32,del:174,rep:281,rost:114,prof:0},
+  {id:'6971a5...',trips:718,int:75.5,data:2.5,churn:48.8,net:0.30,un:176,add:209,del:82,rep:251,rost:13,prof:5},
+  {id:'683ed8...',trips:2047,int:72.2,data:1.2,churn:49.8,net:0.20,un:570,add:593,del:122,rep:762,rost:19,prof:7},
+  {id:'691b21...',trips:1166,int:71.7,data:2.1,churn:45.2,net:-0.12,un:330,add:155,del:235,rep:446,rost:11,prof:13},
+  {id:'694a22...',trips:1279,int:71.7,data:6.6,churn:52.4,net:-0.14,un:362,add:154,del:289,rep:474,rost:81,prof:7},
+  {id:'6838407...',trips:824,int:70.8,data:6.7,churn:71.7,net:-0.07,un:241,add:141,del:175,rep:267,rost:55,prof:3},
+  {id:'68b812...',trips:98,int:70.4,data:11.2,churn:79.4,net:-0.42,un:29,add:4,del:31,rep:34,rost:11,prof:0},
+  {id:'69c649...',trips:63,int:55.6,data:23.8,churn:35.4,net:-0.11,un:28,add:9,del:9,rep:17,rost:13,prof:2},
+  {id:'697af8...',trips:426,int:52.6,data:1.6,churn:39.7,net:0.25,un:202,add:114,del:14,rep:96,rost:7,prof:0},
+  {id:'67e27a...',trips:62,int:48.4,data:6.5,churn:47.0,net:-0.08,un:32,add:8,del:11,rep:11,rost:4,prof:0},
+  {id:'682b38...',trips:17,int:41.2,data:0.0,churn:33.3,net:0.00,un:10,add:3,del:3,rep:1,rost:0,prof:0},
+];
+
+const dowData = [
+  {day:'Mon',trips:1394,int:71.1,data:4.5,churn:51.7,un:403,add:268,del:224,rep:499,rost:53,prof:12},
+  {day:'Tue',trips:1487,int:72.7,data:6.0,churn:54.1,un:406,add:276,del:222,rep:583,rost:76,prof:14},
+  {day:'Wed',trips:1648,int:73.4,data:6.8,churn:58.1,un:438,add:294,del:278,rep:638,rost:112,prof:5},
+  {day:'Thu',trips:1244,int:71.5,data:4.3,churn:56.1,un:354,add:227,del:223,rep:440,rost:55,prof:3},
+  {day:'Fri',trips:950,int:68.0,data:3.3,churn:51.8,un:304,add:202,del:149,rep:295,rost:27,prof:4},
+  {day:'Sat',trips:294,int:65.3,data:1.0,churn:44.9,un:102,add:89,del:23,rep:80,rost:2,prof:1},
+  {day:'Sun',trips:334,int:64.1,data:1.5,churn:46.2,un:120,add:71,del:31,rep:112,rost:6,prof:0},
+];
+
+const shiftHours = ['00','02','03','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23'];
+const shiftOps =   [83.2,67.4,62.3,58.9,67.7,69.6,73.3,74.2,76.0,66.5,81.8,55.1,77.3,58.9,58.8,69.1,76.4,58.2,64.4,68.8,70.9,76.7];
+const shiftData2 = [2.0,0.0,1.9,0.6,0.0,1.3,20.0,3.7,12.0,3.1,8.4,7.1,12.7,9.5,11.8,6.9,4.8,6.0,1.0,1.6,5.2,3.1];
+
+const shiftPatterns = [
+  {hr:'00',trips:351,un:59,add:82,del:21,rep:189},
+  {hr:'02',trips:46,un:15,add:11,del:6,rep:14},
+  {hr:'03',trips:316,un:119,add:98,del:18,rep:81},
+  {hr:'05',trips:158,un:65,add:50,del:4,rep:39},
+  {hr:'06',trips:235,un:76,add:64,del:23,rep:72},
+  {hr:'07',trips:375,un:114,add:109,del:33,rep:119},
+  {hr:'09',trips:829,un:214,add:172,del:154,rep:289},
+  {hr:'11',trips:454,un:152,add:59,del:109,rep:134},
+  {hr:'12',trips:726,un:132,add:76,del:181,rep:337},
+  {hr:'14',trips:370,un:84,add:53,del:59,rep:174},
+  {hr:'15',trips:190,un:78,add:6,del:51,rep:55},
+  {hr:'17',trips:1220,un:377,add:192,del:220,rep:431},
+  {hr:'18',trips:292,un:69,add:78,del:37,rep:108},
+  {hr:'19',trips:201,un:84,add:19,del:44,rep:54},
+  {hr:'20',trips:407,un:145,add:83,del:47,rep:132},
+  {hr:'21',trips:250,un:78,add:66,del:28,rep:78},
+  {hr:'22',trips:309,un:90,add:73,del:33,rep:113},
+  {hr:'23',trips:421,un:98,add:110,del:33,rep:180},
+];
+
+const sizeData = [
+  {size:'1 emp',trips:1446,un:718,add:11,del:470,rep:247,int:50.3,churn:115.0},
+  {size:'2–3',trips:4786,un:1261,add:1024,del:661,rep:1840,int:73.7,churn:51.6},
+  {size:'4–5',trips:1056,un:138,add:372,del:19,rep:527,int:86.9,churn:36.0},
+  {size:'6+',trips:63,un:10,add:20,del:0,rep:33,int:84.1,churn:24.7},
+];
+
+const workload = {
+  dates:['3/22','3/23','3/24','3/25','3/26','3/27','3/28','3/29','3/30','3/31','4/1','4/2','4/3','4/4','4/5','4/6','4/7','4/8','4/9','4/10','4/11','4/12','4/13','4/14','4/15','4/16','4/17','4/18','4/19','4/20'],
+  trips:[76,415,425,463,390,288,76,71,322,341,377,239,64,62,68,315,337,466,309,337,77,51,228,384,342,306,261,79,68,114],
+  int:[53,270,279,329,270,187,51,53,237,253,280,182,42,40,41,229,255,339,223,231,56,25,174,294,262,215,186,45,42,81]
+};
+
+const weeklyOps = {
+  weeks:['03/16','03/23','03/30','04/06','04/13','04/20'],
+  sites:[
+    {id:'683ed8...',vals:[null,71.3,72.9,74.1,71.2,63.2],trips:[76,527,442,486,497,19]},
+    {id:'694a22...',vals:[null,68.5,73.1,69.4,74.3,82.5],trips:[0,270,279,359,331,40]},
+    {id:'691b21...',vals:[null,72.1,74.3,72.3,70.0,47.1],trips:[0,297,214,368,270,17]},
+    {id:'6838407...',vals:[null,73.8,73.9,61.0,74.1,79.2],trips:[0,233,153,213,201,24]},
+    {id:'6971a5...',vals:[null,76.1,73.4,79.8,73.3,69.2],trips:[0,163,173,178,191,13]},
+    {id:'694b93...',vals:[null,78.1,74.4,78.8,79.9,null],trips:[0,155,156,156,159,1]},
+    {id:'697af8...',vals:[null,52.6,null,null,null,null],trips:[0,426,0,0,0,0]},
+  ]
+};
+
+const weeklyDataQ = {
+  weeks:['03/16','03/23','03/30','04/06','04/13','04/20'],
+  sites:[
+    {id:'694b93...',vals:[null,15.5,19.9,18.6,15.7,null],trips:[0,155,156,156,159,1]},
+    {id:'694a22...',vals:[null,7.4,9.0,5.8,5.4,2.5],trips:[0,270,279,359,331,40]},
+    {id:'6838407...',vals:[null,8.2,11.1,5.2,3.5,4.2],trips:[0,233,153,213,201,24]},
+    {id:'68b812...',vals:[null,null,10.0,10.2,15.8,null],trips:[0,0,20,59,19,0]},
+    {id:'69c649...',vals:[null,null,null,23.8,null,null],trips:[0,0,0,63,0,0]},
+    {id:'683ed8...',vals:[null,1.7,1.6,0.6,0.4,0.0],trips:[76,527,442,486,497,19]},
+    {id:'697af8...',vals:[null,1.6,null,null,null,null],trips:[0,426,0,0,0,0]},
+  ]
+};
+
+function pct(n,t){ return t>0?(n/t*100).toFixed(1):'-'; }
+function dominant(s){
+  const max=Math.max(s.add,s.del,s.rep);
+  if(s.add===s.del && s.add>0 && s.rep<=s.add) return {label:'Mixed',color:'#888'};
+  if(max===s.rep) return {label:'Replace',color:'#7c5cbf'};
+  if(max===s.add) return {label:'Add only',color:'#2d9e6b'};
+  return {label:'Delete only',color:'#c4622d'};
+}
+function stackedDs(data,nFn){
+  return [
+    {label:'Untouched',data:data.map(d=>+(d.un/nFn(d)*100).toFixed(1)),backgroundColor:C.untouched,borderRadius:2},
+    {label:'Add only',data:data.map(d=>+(d.add/nFn(d)*100).toFixed(1)),backgroundColor:C.add,borderRadius:2},
+    {label:'Delete only',data:data.map(d=>+(d.del/nFn(d)*100).toFixed(1)),backgroundColor:C.del,borderRadius:2},
+    {label:'Replace',data:data.map(d=>+(d.rep/nFn(d)*100).toFixed(1)),backgroundColor:C.replace,borderRadius:2},
+  ];
+}
+const stackedOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#9090b0',maxRotation:45}},y:{stacked:true,max:100,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}};
+
+// OVERVIEW charts
+new Chart(document.getElementById('trendMain'),{type:'line',data:{labels:trendDates,datasets:[{data:trendVals,borderColor:'#1a1a2e',backgroundColor:'rgba(26,26,46,0.05)',borderWidth:2,pointRadius:0,fill:true,tension:0.4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:9,family:'DM Sans'},color:'#9090b0',maxTicksLimit:8}},y:{min:40,max:85,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}}});
+new Chart(document.getElementById('donutMain'),{type:'doughnut',data:{labels:['Minor','Moderate','Heavy','Full rebuild'],datasets:[{data:[351,1587,250,459],backgroundColor:['#a8d8bc','#f5eac8','#f0c89a','#c4622d'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false}}}});
+
+// PATTERNS charts
+new Chart(document.getElementById('sizePatternChart'),{type:'bar',data:{labels:sizeData.map(d=>d.size),datasets:stackedDs(sizeData,d=>d.trips)},options:stackedOpts});
+new Chart(document.getElementById('dirPatternChart'),{type:'bar',data:{labels:['Login','Logout'],datasets:[
+  {label:'Untouched',data:[+(1297/4591*100).toFixed(1),+(830/2760*100).toFixed(1)],backgroundColor:C.untouched,borderRadius:2},
+  {label:'Add only',data:[+(827/4591*100).toFixed(1),+(600/2760*100).toFixed(1)],backgroundColor:C.add,borderRadius:2},
+  {label:'Delete only',data:[+(797/4591*100).toFixed(1),+(353/2760*100).toFixed(1)],backgroundColor:C.del,borderRadius:2},
+  {label:'Replace',data:[+(1670/4591*100).toFixed(1),+(977/2760*100).toFixed(1)],backgroundColor:C.replace,borderRadius:2},
+]},options:stackedOpts});
+
+const ptb=document.getElementById('patternTableBody');
+sites.forEach(s=>{
+  const dom=dominant(s);
+  ptb.innerHTML+=`<tr>
+    <td><span class="mono">${s.id}</span></td>
+    <td style="font-weight:500;color:var(--ink)">${s.trips.toLocaleString()}</td>
+    <td>${pct(s.un,s.trips)}%</td>
+    <td style="color:#2d9e6b;font-weight:500;">${pct(s.add,s.trips)}%</td>
+    <td style="color:#c4622d;font-weight:500;">${pct(s.del,s.trips)}%</td>
+    <td style="color:#7c5cbf;font-weight:500;">${pct(s.rep,s.trips)}%</td>
+    <td><div class="stacked-bar" style="width:100px;">
+      <div class="sb-seg" style="width:${pct(s.un,s.trips)}%;background:${C.untouched};"></div>
+      <div class="sb-seg" style="width:${pct(s.add,s.trips)}%;background:${C.add};"></div>
+      <div class="sb-seg" style="width:${pct(s.del,s.trips)}%;background:${C.del};"></div>
+      <div class="sb-seg" style="width:${pct(s.rep,s.trips)}%;background:${C.replace};"></div>
+    </div></td>
+    <td><span style="font-size:11px;font-weight:500;color:${dom.color};">${dom.label}</span></td>
+  </tr>`;
+});
+
+// CLIENTS charts
+const ctb=document.getElementById('clientTableBody');
+sites.forEach(s=>{
+  const churnTag=s.churn>=70?'tag-high':s.churn>=45?'tag-med':'tag-low';
+  const dataTag=s.data>=15?'tag-high':s.data>=5?'tag-med':'tag-low';
+  const netStr=s.net>0?`+${s.net.toFixed(2)}`:s.net.toFixed(2);
+  const netColor=s.net>0.1?'#2d7dd2':s.net<-0.1?'#c4622d':'#9090b0';
+  const intColor=s.int>=75?'#c4622d':s.int>=60?'#d4a017':'#2d9e6b';
+  const dom=dominant(s);
+  const assess=s.data>=15?'Data + routing issues':s.churn>=70?'Review routing config':s.int<=55?'Performing well':'Monitor';
+  ctb.innerHTML+=`<tr>
+    <td><span class="mono">${s.id}</span></td>
+    <td style="font-weight:500;color:var(--ink)">${s.trips.toLocaleString()}</td>
+    <td><div class="bar-row"><div class="bar-track"><div class="bar-fill" style="width:${s.int}%;background:${intColor};"></div></div><span class="bar-val">${s.int}%</span></div></td>
+    <td><span class="tag ${dataTag}">${s.data.toFixed(1)}%</span></td>
+    <td><span class="tag ${churnTag}">${s.churn.toFixed(0)}%</span></td>
+    <td style="color:${netColor};font-weight:500;">${netStr}</td>
+    <td><span style="font-size:11px;font-weight:500;color:${dom.color};">${dom.label}</span></td>
+    <td style="font-size:11px;color:var(--ink-muted);">${assess}</td>
+  </tr>`;
+});
+
+new Chart(document.getElementById('clientIntChart'),{type:'bar',data:{labels:sites.map(s=>s.id),datasets:[{data:sites.map(s=>s.int),backgroundColor:sites.map(s=>s.int>=75?'#c4622d':s.int>=60?'#d4a017':'#2d9e6b'),borderRadius:4,borderWidth:0}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{min:0,max:100,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#4a4a6a'}}}}});
+new Chart(document.getElementById('clientDataChart'),{type:'bar',data:{labels:sites.map(s=>s.id),datasets:[{data:sites.map(s=>s.data),backgroundColor:sites.map(s=>s.data>=15?'#c4622d':s.data>=5?'#d4a017':'#2d9e6b'),borderRadius:4,borderWidth:0}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{min:0,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#4a4a6a'}}}}});
+
+// TIMING charts
+new Chart(document.getElementById('dowChart'),{type:'bar',data:{labels:dowData.map(d=>d.day),datasets:[
+  {label:'Ops %',data:dowData.map(d=>d.int),backgroundColor:'#1a1a2e',borderRadius:3,borderWidth:0},
+  {label:'Data %',data:dowData.map(d=>d.data),backgroundColor:'#1a7a8a',borderRadius:3,borderWidth:0},
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#4a4a6a'}},y:{min:0,max:85,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}}});
+
+new Chart(document.getElementById('dowPatternChart'),{type:'bar',data:{labels:dowData.map(d=>d.day),datasets:stackedDs(dowData,d=>d.trips)},options:stackedOpts});
+
+new Chart(document.getElementById('shiftChart'),{type:'line',data:{labels:shiftHours.map(h=>h+':00'),datasets:[
+  {label:'Ops %',data:shiftOps,borderColor:'#1a1a2e',backgroundColor:'transparent',borderWidth:2,pointRadius:2,tension:0.3},
+  {label:'Data %',data:shiftData2,borderColor:'#1a7a8a',backgroundColor:'transparent',borderWidth:2,pointRadius:2,tension:0.3,borderDash:[4,3]},
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:9,family:'DM Sans'},color:'#9090b0',maxRotation:45}},y:{min:0,max:100,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}}});
+
+new Chart(document.getElementById('sizeIntChart'),{type:'bar',data:{labels:sizeData.map(d=>d.size),datasets:[
+  {label:'Intervention %',data:sizeData.map(d=>d.int),backgroundColor:'#1a1a2e',borderRadius:4,borderWidth:0},
+  {label:'Churn %',data:sizeData.map(d=>d.churn),backgroundColor:'rgba(196,98,45,0.55)',borderRadius:4,borderWidth:0},
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:11,family:'DM Sans'},color:'#4a4a6a'}},y:{min:0,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}}});
+
+new Chart(document.getElementById('workloadChart'),{type:'bar',data:{labels:workload.dates,datasets:[
+  {label:'Total',data:workload.trips,backgroundColor:'rgba(26,26,46,0.1)',borderRadius:3,borderWidth:0},
+  {label:'Intervened',data:workload.int,backgroundColor:'#c4622d',borderRadius:3,borderWidth:0},
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:8,family:'DM Sans'},color:'#9090b0',maxTicksLimit:8}},y:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0'}}}}});
+
+// TRENDS
+function buildWeeklyTable(tableId, data, colorFn) {
+  const wt=document.getElementById(tableId);
+  const wkLabels=['3/16','3/23','3/30','4/6','4/13','4/20'];
+  let thead='<thead><tr><th>Client</th>';
+  wkLabels.forEach(w=>thead+=`<th>Wk ${w}</th>`);
+  thead+='</tr></thead>';
+  let tbody='<tbody>';
+  data.sites.forEach(s=>{
+    let row=`<tr><td><span class="mono">${s.id}</span></td>`;
+    s.vals.forEach((v,i)=>{
+      if(v===null||s.trips[i]===0){row+='<td style="color:var(--ink-muted);font-size:11px;">—</td>';}
+      else{
+        const colors=colorFn(v);
+        row+=`<td><span class="week-cell" style="background:${colors.bg};color:${colors.col};">${v.toFixed(1)}%</span><div style="font-size:9px;color:var(--ink-muted);margin-top:2px;">${s.trips[i]}t</div></td>`;
+      }
+    });
+    row+='</tr>';
+    tbody+=row;
+  });
+  tbody+='</tbody>';
+  wt.innerHTML=thead+tbody;
+}
+
+buildWeeklyTable('weeklyTable', weeklyOps, v=>({
+  bg:v>=75?'#fde8e0':v>=65?'#fdf3d0':'#d8f0e4',
+  col:v>=75?'#c4622d':v>=65?'#9a7200':'#1e7a4a'
+}));
+
+buildWeeklyTable('weeklyDataTable', weeklyDataQ, v=>({
+  bg:v>=15?'#fde8e0':v>=5?'#fdf3d0':'#d8f0e4',
+  col:v>=15?'#c4622d':v>=5?'#9a7200':'#1e7a4a'
+}));
+
+const lineColors=['#c4622d','#2d7dd2','#2d9e6b','#7c5cbf','#d4a017','#1a1a2e'];
+new Chart(document.getElementById('weeklyTrendChart'),{type:'line',data:{labels:['3/16','3/23','3/30','4/6','4/13','4/20'],datasets:weeklyOps.sites.map((s,i)=>({label:s.id,data:s.vals,borderColor:lineColors[i],backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:0.3,spanGaps:false}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10,family:'DM Sans'},color:'#4a4a6a',boxWidth:10,padding:10}}},scales:{x:{grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#9090b0'}},y:{min:40,max:90,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}}});
+
+// DATA QUALITY charts
+new Chart(document.getElementById('dataClientChart'),{type:'bar',data:{labels:sites.map(s=>s.id),datasets:[{data:sites.map(s=>s.data),backgroundColor:sites.map(s=>s.data>=15?'#c4622d':s.data>=5?'#d4a017':'#1a7a8a'),borderRadius:4,borderWidth:0}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{min:0,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#4a4a6a'}}}}});
+
+new Chart(document.getElementById('dataTypeChart'),{type:'bar',data:{labels:sites.map(s=>s.id),datasets:[
+  {label:'Roster cancellations',data:sites.map(s=>s.rost),backgroundColor:'#2d9e9e',borderRadius:3,borderWidth:0},
+  {label:'Profile changes',data:sites.map(s=>s.prof),backgroundColor:'#5ab8c4',borderRadius:3,borderWidth:0},
+]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10,family:'DM Sans'},color:'#4a4a6a',boxWidth:10,padding:8}}},scales:{x:{stacked:true,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#4a4a6a'}}}}});
+
+new Chart(document.getElementById('dataDowChart'),{type:'bar',data:{labels:dowData.map(d=>d.day),datasets:[{data:dowData.map(d=>d.data),backgroundColor:dowData.map(d=>d.data>=6?'#c4622d':d.data>=3?'#d4a017':'#1a7a8a'),borderRadius:5,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10,family:'DM Sans'},color:'#4a4a6a'}},y:{min:0,max:10,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:9},color:'#9090b0',callback:v=>v+'%'}}}}});
+
+new Chart(document.getElementById('dataUnfixedChart'),{type:'doughnut',data:{labels:['Fixed by ops','Not fixed (ran short)'],datasets:[{data:[296,61],backgroundColor:['#2d9e6b','#c4622d'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:10,family:'DM Sans'},color:'#4a4a6a',boxWidth:10,padding:10}}}}});
+</script>
+</body>
+</html>
